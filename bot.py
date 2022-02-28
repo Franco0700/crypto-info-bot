@@ -1,3 +1,4 @@
+from email import message
 from bs4 import BeautifulSoup
 from Saved_Thread import SavedThread
 import requests
@@ -8,6 +9,7 @@ import os
 import re
 import json
 import bisect
+import yaml
 from pprint import pformat
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext, CommandHandler
 from telegram import Update, Bot
@@ -30,7 +32,7 @@ class TelegramBot:
                 x.start()
             for i in scrapTh:
                 i.join()
-            bot.send_message(th.owner, results)
+            bot.send_message(th.owner, yaml.dump(results))
 
     def search_price(self, url, newCoin, results):
         req = requests.get(url)
@@ -56,7 +58,18 @@ class TelegramBot:
     def error_callback(self, update, context):
         logger.warning('Update "%s" caused error "%s"', update, context.error)
 
+    def record_callback(self, update):
+        mes = update.message
+        message = ( "\n" +
+            'name: ' + str(mes.chat.first_name) + " " + str(mes.chat.last_name) + '\n' +
+            'username: ' + str(mes.chat.username) + '\n' +
+            'chatID: ' + str(mes.chat.id) + '\n' +
+            'message: ' + str(mes.text) + '\n'
+        )
+        logger.info(message)
+
     def coin_price(self, update, context):
+        self.record_callback(update)
         th = []
         results = {}
         for coin in context.args:
@@ -67,7 +80,7 @@ class TelegramBot:
             x.start()
         for i in th:
             i.join()
-        update.message.reply_text(results)
+        update.message.reply_text(yaml.dump(results))
 
     def send_hello(self, args):
         th = args[0]
@@ -76,26 +89,31 @@ class TelegramBot:
 
     def check_sch(self, func, args, th):
         x = threading.Timer(th.time, function=self.check_sch, args=(func, args, th))
-        if self.threads_running[th.index].mustContinue:
+        index = bisect.bisect(self.chatScheduleId, th.owner) - 1
+        if self.threads_running[index].mustContinue:
             func(args)
             x.start()
         else:
             x.cancel()
-            self.threads_running.pop(th.index)
+            self.threads_running.pop(index)
+            self.chatScheduleId.pop(index)
 
     def set_schedule(self, func, update, context):
+        self.record_callback(update)
         id = update.message.chat_id
         time = int(context.args[0])
         context.bot.send_message(update.message.chat_id, "Okay, send message in " + context.args[0] + " seconds")
-        index = bisect.bisect_left([x.owner for x in self.threads_running], id)
+        index = bisect.bisect(self.chatScheduleId, id)
         th = SavedThread(index, id, time)
         x = threading.Timer(time, function=self.check_sch, args=(func, (th, context.bot), th))
         self.threads_running.insert(index, th)
+        self.chatScheduleId.insert(index, id)
         x.start()
 
     def stop_schedule(self, update, context):
+        self.record_callback(update)
         id = update.message.chat_id
-        index = bisect.bisect([x.owner for x in self.threads_running], id)
+        index = bisect.bisect(self.chatScheduleId, id)
         beforeElem = self.threads_running[index-1]
         if (beforeElem.owner == id):
             beforeElem.mustContinue = False
@@ -145,19 +163,4 @@ def bot_send_text(bot_message):
         response = requests.get(send_text)
 
     return response
-
-
-if __name__ == "__main__":
-    with open(sys.argv[1], "r") as fh:
-        th=list()
-        results={}
-        for coin in fh.readlines():
-            newCoin = coin.rstrip('\n\r')
-            url = "https://coinmarketcap.com/es/currencies/" + newCoin + "/"
-            x = threading.Thread(target=search_price, args=(url, newCoin, results))
-            th.append(x)
-            x.start()
-        for i in th:
-            i.join()
-        bot_send_text(results)
 """
