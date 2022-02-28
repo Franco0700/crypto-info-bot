@@ -15,7 +15,8 @@ from telegram.ext import Updater, MessageHandler, Filters, CallbackContext, Comm
 from telegram import Update, Bot
 import logging
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -54,8 +55,7 @@ class TelegramBot:
             data = {
                 "Price": price,
                 "Percentage": percentage,
-                "Minimo en 24h/ Maximo en 24h": table.find_next_sibling("td").getText()
-            }
+                "Minimo en 24h/ Maximo en 24h": table.find_next_sibling("td").getText()}
             results[newCoin] = data
         else:
             results[newCoin] = "Crypto Not Found"
@@ -66,11 +66,20 @@ class TelegramBot:
     def record_callback(self, update):
         mes = update.message
         message = ("\n" +
-                   'name: ' + str(mes.chat.first_name) + " " + str(mes.chat.last_name) + '\n' +
-                   'username: ' + str(mes.chat.username) + '\n' +
-                   'chatID: ' + str(mes.chat.id) + '\n' +
-                   'message: ' + str(mes.text) + '\n'
-                   )
+                   'name: ' +
+                   str(mes.chat.first_name) +
+                   " " +
+                   str(mes.chat.last_name) +
+                   '\n' +
+                   'username: ' +
+                   str(mes.chat.username) +
+                   '\n' +
+                   'chatID: ' +
+                   str(mes.chat.id) +
+                   '\n' +
+                   'message: ' +
+                   str(mes.text) +
+                   '\n')
         logger.info(message)
 
     def coin_price(self, update, context):
@@ -110,7 +119,10 @@ class TelegramBot:
         id = update.message.chat_id
         time = int(context.args[0])
         context.bot.send_message(
-            update.message.chat_id, "Okay, send message in " + context.args[0] + " seconds")
+            update.message.chat_id,
+            "Okay, send message in " +
+            context.args[0] +
+            " seconds")
         index = bisect.bisect(self.chatScheduleId, id)
         th = SavedThread(index, id, time)
         x = threading.Timer(time, function=self.check_sch,
@@ -123,7 +135,7 @@ class TelegramBot:
         self.record_callback(update)
         id = update.message.chat_id
         index = bisect.bisect(self.chatScheduleId, id)
-        beforeElem = self.threads_running[index-1]
+        beforeElem = self.threads_running[index - 1]
         if (beforeElem.owner == id):
             beforeElem.mustContinue = False
         else:
@@ -165,9 +177,9 @@ def bot_send_text(bot_message):
     bot_chatID = "1934620415"
     for rs in bot_message:
         send_text = ('https://api.telegram.org/bot' +
-                    bot_token + 
-                    '/sendMessage?chat_id=' + 
-                    bot_chatID + 
+                    bot_token +
+                    '/sendMessage?chat_id=' +
+                    bot_chatID +
                     '&parse_mode=Markdown&text=' +
                     '+' + rs + "\n" +
                    pformat(bot_message[rs]))
