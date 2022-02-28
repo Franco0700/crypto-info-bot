@@ -150,7 +150,7 @@ class TelegramBot:
         self.dp.add_handler(CommandHandler('default', partial(
             self.set_schedule, self.coins_from_file)))
         self.dp.add_handler(CommandHandler('stop', self.stop_schedule))
-        # self.dp.add_error_handler(self.error_callback)
+        self.dp.add_error_handler(self.error_callback)
 
         # Starting bot
         self.updater.start_polling()
@@ -170,21 +170,3 @@ class TelegramBot:
 if __name__ == '__main__':
     coinBot = TelegramBot()
     coinBot.start()
-
-"""
-def bot_send_text(bot_message):
-    bot_token = "TOKEN"
-    bot_chatID = "1934620415"
-    for rs in bot_message:
-        send_text = ('https://api.telegram.org/bot' +
-                    bot_token +
-                    '/sendMessage?chat_id=' +
-                    bot_chatID +
-                    '&parse_mode=Markdown&text=' +
-                    '+' + rs + "\n" +
-                   pformat(bot_message[rs]))
-
-        response = requests.get(send_text)
-
-    return response
-"""
