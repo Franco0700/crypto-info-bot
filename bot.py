@@ -129,6 +129,7 @@ class TelegramBot:
                             args=(func, (th, context.bot), th))
         self.threads_running.insert(index, th)
         self.chatScheduleId.insert(index, id)
+        func((th, context.bot))
         x.start()
 
     def stop_schedule(self, update, context):
