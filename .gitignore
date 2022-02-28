@@ -118,3 +118,4 @@ Scripts/
 *.lock
 pyvenv.cfg
 Pipfile
+testing.py
