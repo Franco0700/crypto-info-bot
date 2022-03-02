@@ -17,7 +17,7 @@ from selenium.webdriver.firefox.service import Service
 from webdriver_manager.firefox import GeckoDriverManager
 from pprint import pformat
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext, CommandHandler
-from telegram import Update, Bot
+from telegram import Update, Bot, constants
 import logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -40,14 +40,14 @@ class TelegramBot:
                 x.start()
             for i in scrapTh:
                 i.join()
-            bot.send_message(th.owner, yaml.dump(results))
+            bot.send_message(th.owner, yaml.dump(results), constants.PARSEMODE_HTML)
 
     def error_callback(self, update, context):
         logger.warning('Update "%s" caused error "%s"', update, context.error)
 
     def record_callback(self, update):
         mes = update.message
-        message = ("\n" +
+        message = ('\n' +
                    'name: ' +
                    str(mes.chat.first_name) +
                    " " +
@@ -94,7 +94,7 @@ class TelegramBot:
             x.start()
         for i in th:
             i.join()
-        update.message.reply_text(yaml.dump(results))
+        update.message.reply_text(yaml.dump(results), constants.PARSEMODE_HTML)
 
     def send_hello(self, args):
         th = args[0]
@@ -128,6 +128,7 @@ class TelegramBot:
                             args=(func, (th, context.bot), th))
         self.threads_running.insert(index, th)
         self.chatScheduleId.insert(index, id)
+        func((th, context.bot))
         x.start()
 
     def stop_schedule(self, update, context):
@@ -140,6 +141,13 @@ class TelegramBot:
         else:
             context.bot.send_message(id, "Not message scheduled for you")
 
+    def coins_file(self, update, context):
+        self.record_callback(update)
+        id = update.message.chat_id
+        bot = context.bot
+        th = SavedThread(1, id, 0)
+        self.coins_from_file((th, bot))
+
     def start(self):
         ''' START '''
         # Commands received by the bot
@@ -151,6 +159,9 @@ class TelegramBot:
         self.dp.add_handler(CommandHandler('stop', self.stop_schedule))
         self.dp.add_handler(CommandHandler('bin', self.binance_price))
         self.dp.add_error_handler(self.error_callback)
+        self.dp.add_handler(CommandHandler('list', self.coins_file))
+        #self.dp.add_error_handler(self.error_callback)
+
         # Starting bot
         self.updater.start_polling()
         # Bot waiting messages
