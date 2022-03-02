@@ -1,4 +1,3 @@
-from email import message
 from bs4 import BeautifulSoup
 from Saved_Thread import SavedThread
 import requests
@@ -24,6 +23,7 @@ logging.basicConfig(
     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class TelegramBot:
     def coins_from_file(self, args):
         th = args[0]
@@ -40,7 +40,8 @@ class TelegramBot:
                 x.start()
             for i in scrapTh:
                 i.join()
-            bot.send_message(th.owner, yaml.dump(results), constants.PARSEMODE_HTML)
+            bot.send_message(th.owner, yaml.dump(
+                results), constants.PARSEMODE_HTML)
 
     def error_callback(self, update, context):
         logger.warning('Update "%s" caused error "%s"', update, context.error)
@@ -71,12 +72,13 @@ class TelegramBot:
         results = {}
         th = []
         lock = threading.Lock()
-        browser = webdriver.Firefox(service=Service(GeckoDriverManager().install()))
+        browser = webdriver.Firefox(
+            service=Service(GeckoDriverManager().install()))
         for coin in context.args:
             newCoin = coin.rstrip('\n\r').upper()
             url = "https://www.binance.com/en/trade/" + newCoin + "_BUSD"
             x = threading.Thread(target=search_price_bin,
-                                    args=(url, browser, newCoin, results, lock))
+                                 args=(url, browser, newCoin, results, lock))
             th.append(x)
             x.start()
         for i in th:
@@ -106,26 +108,38 @@ class TelegramBot:
     def check_sch(self, func, args, th):
         x = threading.Timer(th.time, function=self.check_sch,
                             args=(func, args, th))
-        index = bisect.bisect(self.chatScheduleId, th.owner) - 1
-        if self.threads_running[index].mustContinue:
-            func(args)
-            x.start()
+        i = 1
+        index = bisect.bisect(self.chatScheduleId, th.owner)
+        elem = self.threads_running[index - i]
+        while (elem.owner == th.owner
+                and elem.index != th.index
+                and i <= index):
+            i += 1
+            elem = self.threads_running[index - i]
+        if (i <= index and elem.owner == th.owner):
+            if elem.mustContinue:
+                func(args)
+                x.start()
+            else:
+                x.cancel()
+                self.threads_running.pop(index - i)
+                self.chatScheduleId.pop(index - i)
         else:
-            x.cancel()
-            self.threads_running.pop(index)
-            self.chatScheduleId.pop(index)
+            print("Something went wrong")
 
     def set_schedule(self, func, update, context):
         self.record_callback(update, context.bot)
         id = update.message.chat_id
         time = int(context.args[0])
+        index = bisect.bisect(self.chatScheduleId, id)
+        th = SavedThread(index, id, time)
         context.bot.send_message(
             update.message.chat_id,
             "Okay, send message in " +
             context.args[0] +
-            " seconds")
-        index = bisect.bisect(self.chatScheduleId, id)
-        th = SavedThread(index, id, time)
+            " seconds." +
+            "This is your schedule id for this event " +
+            str(index))
         x = threading.Timer(time, function=self.check_sch,
                             args=(func, (th, context.bot), th))
         self.threads_running.insert(index, th)
@@ -137,11 +151,20 @@ class TelegramBot:
         self.record_callback(update, context.bot)
         id = update.message.chat_id
         index = bisect.bisect(self.chatScheduleId, id)
-        beforeElem = self.threads_running[index - 1]
-        if (beforeElem.owner == id):
+        ownerSchId = int(context.args[0])
+        i = 1
+        notFinded = True
+        beforeElem = self.threads_running[index - i]
+        while (beforeElem.owner == id
+                and beforeElem.index != ownerSchId
+                and i <= index):
+            i += 1
+            beforeElem = self.threads_running[index - i]
+        if (i <= index and beforeElem.owner == id):
             beforeElem.mustContinue = False
         else:
-            context.bot.send_message(id, "Not message scheduled for you")
+            context.bot.send_message(
+                id, "Not message scheduled for you with that schedule id")
 
     def coins_file(self, update, context):
         self.record_callback(update, context.bot)
@@ -159,6 +182,7 @@ class TelegramBot:
                 self.actRemote = True
                 update.message.reply_text("Remote logging activated")
         else:
+            self.record_callback(update, context.bot)
             update.message.reply_text("You can't perform this action")
 
     def start(self):
@@ -185,7 +209,6 @@ class TelegramBot:
         print("Iniciando bot....")
         self.updater = Updater(TOKEN, use_context=True)
         self.dp = self.updater.dispatcher
-        self.lowestIndex = 0
         self.threads_running = []
         self.owner = 1934620415
         self.actRemote = False
