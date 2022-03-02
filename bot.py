@@ -45,7 +45,7 @@ class TelegramBot:
     def error_callback(self, update, context):
         logger.warning('Update "%s" caused error "%s"', update, context.error)
 
-    def record_callback(self, update):
+    def record_callback(self, update, bot):
         mes = update.message
         message = ('\n' +
                    'name: ' +
@@ -63,9 +63,11 @@ class TelegramBot:
                    str(mes.text) +
                    '\n')
         logger.info(message)
+        if self.actRemote:
+            bot.send_message(self.owner, message)
 
     def binance_price(self, update, context):
-        self.record_callback(update)
+        self.record_callback(update, context.bot)
         results = {}
         th = []
         lock = threading.Lock()
@@ -79,10 +81,10 @@ class TelegramBot:
             x.start()
         for i in th:
             i.join()
-        update.message.reply_text(yaml.dump(results))
+        update.message.reply_text(yaml.dump(results), constants.PARSEMODE_HTML)
 
     def coin_price(self, update, context):
-        self.record_callback(update)
+        self.record_callback(update, context.bot)
         th = []
         results = {}
         for coin in context.args:
@@ -114,7 +116,7 @@ class TelegramBot:
             self.chatScheduleId.pop(index)
 
     def set_schedule(self, func, update, context):
-        self.record_callback(update)
+        self.record_callback(update, context.bot)
         id = update.message.chat_id
         time = int(context.args[0])
         context.bot.send_message(
@@ -132,7 +134,7 @@ class TelegramBot:
         x.start()
 
     def stop_schedule(self, update, context):
-        self.record_callback(update)
+        self.record_callback(update, context.bot)
         id = update.message.chat_id
         index = bisect.bisect(self.chatScheduleId, id)
         beforeElem = self.threads_running[index - 1]
@@ -142,11 +144,22 @@ class TelegramBot:
             context.bot.send_message(id, "Not message scheduled for you")
 
     def coins_file(self, update, context):
-        self.record_callback(update)
+        self.record_callback(update, context.bot)
         id = update.message.chat_id
         bot = context.bot
         th = SavedThread(1, id, 0)
         self.coins_from_file((th, bot))
+
+    def switch_remote(self, update, context):
+        if (update.message.chat.id == self.owner):
+            if self.actRemote:
+                self.actRemote = False
+                update.message.reply_text("Remote logging desactivated")
+            else:
+                self.actRemote = True
+                update.message.reply_text("Remote logging activated")
+        else:
+            update.message.reply_text("You can't perform this action")
 
     def start(self):
         ''' START '''
@@ -158,9 +171,9 @@ class TelegramBot:
             self.set_schedule, self.coins_from_file)))
         self.dp.add_handler(CommandHandler('stop', self.stop_schedule))
         self.dp.add_handler(CommandHandler('bin', self.binance_price))
-        self.dp.add_error_handler(self.error_callback)
         self.dp.add_handler(CommandHandler('list', self.coins_file))
-        #self.dp.add_error_handler(self.error_callback)
+        self.dp.add_handler(CommandHandler('remote', self.switch_remote))
+        self.dp.add_error_handler(self.error_callback)
 
         # Starting bot
         self.updater.start_polling()
@@ -174,6 +187,8 @@ class TelegramBot:
         self.dp = self.updater.dispatcher
         self.lowestIndex = 0
         self.threads_running = []
+        self.owner = 1934620415
+        self.actRemote = False
         self.chatScheduleId = []
 
 
