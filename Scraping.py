@@ -28,9 +28,9 @@ def search_price_market(url, newCoin, results):
             "Price": price,
             "Percentage": percentage,
             "Minimo en 24h/ Maximo en 24h": table.find_next_sibling("td").getText()}
-        results[newCoin] = data
+        results[ '<b>' + newCoin + '</b>'] = data
     else:
-        results[newCoin] = "Crypto Not Found"
+        results[ '<b>' + newCoin + '</b>'] = "Crypto Not Found"
 
 def search_price_bin(url, browser, newCoin, results, lock):
     if lock.acquire():
@@ -40,4 +40,4 @@ def search_price_bin(url, browser, newCoin, results, lock):
     parsed = BeautifulSoup(text, "html.parser")
     price = parsed.find(class_=re.compile("showPrice")).get_text()
     data = {"Price": price}
-    results[newCoin] = data
+    results['<b>' + newCoin + '</b>'] = data
