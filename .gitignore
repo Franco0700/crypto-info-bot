@@ -119,3 +119,4 @@ Scripts/
 pyvenv.cfg
 Pipfile
 testing.py
+Include/site/python3.10/greenlet/greenlet.h

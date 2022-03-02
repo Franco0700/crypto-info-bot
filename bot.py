@@ -9,7 +9,12 @@ import os
 import re
 import json
 import bisect
+from Scraping import *
 import yaml
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.firefox.service import Service
+from webdriver_manager.firefox import GeckoDriverManager
 from pprint import pformat
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext, CommandHandler
 from telegram import Update, Bot
@@ -18,7 +23,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 class TelegramBot:
     def coins_from_file(self, args):
@@ -31,34 +35,12 @@ class TelegramBot:
                 newCoin = coin.rstrip('\n\r')
                 url = "https://coinmarketcap.com/es/currencies/" + newCoin + "/"
                 x = threading.Thread(
-                    target=self.search_price, args=(url, newCoin, results))
+                    target=search_price_market, args=(url, newCoin, results))
                 scrapTh.append(x)
                 x.start()
             for i in scrapTh:
                 i.join()
             bot.send_message(th.owner, yaml.dump(results))
-
-    def search_price(self, url, newCoin, results):
-        req = requests.get(url)
-        if req.status_code == 200:
-            parsed = BeautifulSoup(req.text, "html.parser")
-            priceTit = parsed.find(class_=re.compile("priceTitle"))
-            price = priceTit.find(class_=re.compile("priceValue")).get_text()
-            percentage = priceTit.find(style=re.compile(
-                "font-size:14px;font-weight:600;padding:5px 10px")).get_text()
-            table = parsed.find(class_=re.compile(
-                "sc-16r8icm-0 fmPyWa")).findAll(scope=re.compile("row"))[2]
-            if (priceTit.find(class_="icon-Caret-up")):
-                percentage = "+" + percentage
-            else:
-                percentage = "-" + percentage
-            data = {
-                "Price": price,
-                "Percentage": percentage,
-                "Minimo en 24h/ Maximo en 24h": table.find_next_sibling("td").getText()}
-            results[newCoin] = data
-        else:
-            results[newCoin] = "Crypto Not Found"
 
     def error_callback(self, update, context):
         logger.warning('Update "%s" caused error "%s"', update, context.error)
@@ -82,6 +64,23 @@ class TelegramBot:
                    '\n')
         logger.info(message)
 
+    def binance_price(self, update, context):
+        self.record_callback(update)
+        results = {}
+        th = []
+        lock = threading.Lock()
+        browser = webdriver.Firefox(service=Service(GeckoDriverManager().install()))
+        for coin in context.args:
+            newCoin = coin.rstrip('\n\r').upper()
+            url = "https://www.binance.com/en/trade/" + newCoin + "_BUSD"
+            x = threading.Thread(target=search_price_bin,
+                                    args=(url, browser, newCoin, results, lock))
+            th.append(x)
+            x.start()
+        for i in th:
+            i.join()
+        update.message.reply_text(yaml.dump(results))
+
     def coin_price(self, update, context):
         self.record_callback(update)
         th = []
@@ -89,7 +88,7 @@ class TelegramBot:
         for coin in context.args:
             newCoin = coin.rstrip('\n\r')
             url = "https://coinmarketcap.com/es/currencies/" + newCoin + "/"
-            x = threading.Thread(target=self.search_price,
+            x = threading.Thread(target=search_price_market,
                                  args=(url, newCoin, results))
             th.append(x)
             x.start()
@@ -150,8 +149,8 @@ class TelegramBot:
         self.dp.add_handler(CommandHandler('default', partial(
             self.set_schedule, self.coins_from_file)))
         self.dp.add_handler(CommandHandler('stop', self.stop_schedule))
+        self.dp.add_handler(CommandHandler('bin', self.binance_price))
         self.dp.add_error_handler(self.error_callback)
-
         # Starting bot
         self.updater.start_polling()
         # Bot waiting messages
@@ -170,3 +169,39 @@ class TelegramBot:
 if __name__ == '__main__':
     coinBot = TelegramBot()
     coinBot.start()
+
+
+"""
+    def search_price_bin(url, browser, newCoin, results, lock):
+        if lock.acquire():
+            browser.get(url)
+            text = browser.page_source
+            lock.release()
+        parsed = BeautifulSoup(text, "html.parser")
+        price = parsed.find(class_=re.compile("showPrice")).get_text()
+        data = {"Price": price}
+        results[newCoin] = data
+
+
+    def search_price_market(self, url, newCoin, results):
+        req = requests.get(url)
+        if req.status_code == 200:
+            parsed = BeautifulSoup(req.text, "html.parser")
+            priceTit = parsed.find(class_=re.compile("priceTitle"))
+            price = priceTit.find(class_=re.compile("priceValue")).get_text()
+            percentage = priceTit.find(style=re.compile(
+                "font-size:14px;font-weight:600;padding:5px 10px")).get_text()
+            table = parsed.find(class_=re.compile(
+                "sc-16r8icm-0 fmPyWa")).findAll(scope=re.compile("row"))[2]
+            if (priceTit.find(class_="icon-Caret-up")):
+                percentage = "+" + percentage
+            else:
+                percentage = "-" + percentage
+            data = {
+                "Price": price,
+                "Percentage": percentage,
+                "Minimo en 24h/ Maximo en 24h": table.find_next_sibling("td").getText()}
+            results[newCoin] = data
+        else:
+            results[newCoin] = "Crypto Not Found"
+"""
