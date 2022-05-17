@@ -1,5 +1,4 @@
 from bs4 import BeautifulSoup
-from Saved_Thread import SavedThread
 import requests
 import threading
 from functools import partial
@@ -8,7 +7,9 @@ import os
 import re
 import json
 import bisect
+from Saved_Thread import SavedThread
 from Scraping import *
+from constants import HELP_MESSAGE
 import yaml
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -18,10 +19,15 @@ from pprint import pformat
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext, CommandHandler
 from telegram import Update, Bot, constants
 import logging
+if not os.path.isdir("./logging"):
+    os.mkdir("./logging")
 logging.basicConfig(
+    filename="./logging/logs.txt",
+    filemode='a+',
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
 class TelegramBot:
@@ -44,7 +50,10 @@ class TelegramBot:
                 results), constants.PARSEMODE_HTML)
 
     def error_callback(self, update, context):
-        logger.warning('Update "%s" caused error "%s"', update, context.error)
+        mes = f"Update {update} caused error {context.error}"
+        logger.warning(mes)
+        if self.actRemote:
+            context.bot.send_message(self.owner, mes)
 
     def record_callback(self, update, bot):
         mes = update.message
@@ -185,6 +194,10 @@ class TelegramBot:
             self.record_callback(update, context.bot)
             update.message.reply_text("You can't perform this action")
 
+    def send_help(self, update, context):
+        self.record_callback(update, context.bot)
+        update.message.reply_text(HELP_MESSAGE)
+
     def start(self):
         ''' START '''
         # Commands received by the bot
@@ -197,6 +210,9 @@ class TelegramBot:
         self.dp.add_handler(CommandHandler('bin', self.binance_price))
         self.dp.add_handler(CommandHandler('list', self.coins_file))
         self.dp.add_handler(CommandHandler('remote', self.switch_remote))
+        # self.dp.add_handler(CommandHandler('wsp', self.schedule_wsp))
+        self.dp.add_handler(CommandHandler('start', self.send_help))
+        self.dp.add_handler(CommandHandler('help', self.send_help))
         self.dp.add_error_handler(self.error_callback)
 
         # Starting bot
