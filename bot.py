@@ -10,6 +10,7 @@ import bisect
 from Saved_Thread import SavedThread
 from Scraping import *
 from constants import HELP_MESSAGE
+import encrypted
 import yaml
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -221,7 +222,16 @@ class TelegramBot:
         self.updater.idle()
 
     def __init__(self):
-        TOKEN = "TOKEN"
+        if os.path.exists('./token.txt'):
+            with open('./token.txt', 'r+') as fd:
+                token = fd.read()
+                key = input("insert password: ")
+                TOKEN = encrypted.password_decrypt(token, key).decode()
+        else:
+            TOKEN = input("Insert token: ")
+            key = input("Insert password: ")
+            with open('./token.txt', 'w+') as fd:
+                print(encrypted.password_encrypt(TOKEN.encode(), key).decode(), file=fd)
         print("Iniciando bot....")
         self.updater = Updater(TOKEN, use_context=True)
         self.dp = self.updater.dispatcher
