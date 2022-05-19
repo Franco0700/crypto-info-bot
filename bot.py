@@ -1,25 +1,26 @@
-from bs4 import BeautifulSoup
-import requests
-import threading
-from functools import partial
-import sys
-import os
-import re
-import json
 import bisect
-from Saved_Thread import SavedThread
-from Scraping import *
-from constants import HELP_MESSAGE
-import encrypted
-import yaml
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.firefox.service import Service
-from webdriver_manager.firefox import GeckoDriverManager
+import getpass
+import json
+import logging
+import os
 from pprint import pformat
+import re
+import requests
+import sys
+import threading
+
+from bs4 import BeautifulSoup
+import ccxt
+import encrypted
+from functools import partial
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext, CommandHandler
 from telegram import Update, Bot, constants
-import logging
+import yaml
+
+from saved_thread import SavedThread
+from search_info import *
+from constants import HELP_MESSAGE
+
 if not os.path.isdir("./logging"):
     os.mkdir("./logging")
 logging.basicConfig(
@@ -80,19 +81,15 @@ class TelegramBot:
     def binance_price(self, update, context):
         self.record_callback(update, context.bot)
         results = {}
-        th = []
-        lock = threading.Lock()
-        browser = webdriver.Firefox(
-            service=Service(GeckoDriverManager().install()))
+        binance = ccxt.binance()
         for coin in context.args:
-            newCoin = coin.rstrip('\n\r').upper()
-            url = "https://www.binance.com/en/trade/" + newCoin + "_BUSD"
-            x = threading.Thread(target=search_price_bin,
-                                 args=(url, browser, newCoin, results, lock))
-            th.append(x)
-            x.start()
-        for i in th:
-            i.join()
+            coinInfo = binance.fetchTicker(coin)
+            data = {
+                "Price": "$" + coinInfo['bid'],
+                "Minimo en 24h/ Maximo en 24h": str(coinInfo['high']) +
+                                                "/" + str(coinInfo['low'])
+            }
+            results['<b>' + coin + '</b>'] = data
         update.message.reply_text(yaml.dump(results), constants.PARSEMODE_HTML)
 
     def coin_price(self, update, context):
@@ -139,10 +136,10 @@ class TelegramBot:
 
     def set_schedule(self, func, update, context):
         self.record_callback(update, context.bot)
-        id = update.message.chat_id
+        eventId = update.message.chat_id
         time = int(context.args[0])
-        index = bisect.bisect(self.chatScheduleId, id)
-        th = SavedThread(index, id, time)
+        index = bisect.bisect(self.chatScheduleId, eventId)
+        th = SavedThread(index, eventId, time)
         context.bot.send_message(
             update.message.chat_id,
             "Okay, send message in " +
@@ -153,28 +150,28 @@ class TelegramBot:
         x = threading.Timer(time, function=self.check_sch,
                             args=(func, (th, context.bot), th))
         self.threads_running.insert(index, th)
-        self.chatScheduleId.insert(index, id)
+        self.chatScheduleId.insert(index, eventId)
         func((th, context.bot))
         x.start()
 
     def stop_schedule(self, update, context):
         self.record_callback(update, context.bot)
-        id = update.message.chat_id
-        index = bisect.bisect(self.chatScheduleId, id)
+        eventId = update.message.chat_id
+        index = bisect.bisect(self.chatScheduleId, eventId)
         ownerSchId = int(context.args[0])
         i = 1
         notFinded = True
         beforeElem = self.threads_running[index - i]
-        while (beforeElem.owner == id
+        while (beforeElem.owner == eventId
                 and beforeElem.index != ownerSchId
                 and i <= index):
             i += 1
             beforeElem = self.threads_running[index - i]
-        if (i <= index and beforeElem.owner == id):
+        if (i <= index and beforeElem.owner == eventId):
             beforeElem.mustContinue = False
         else:
             context.bot.send_message(
-                id, "Not message scheduled for you with that schedule id")
+                eventId, "Not message scheduled for you with that schedule id")
 
     def coins_file(self, update, context):
         self.record_callback(update, context.bot)
@@ -225,11 +222,11 @@ class TelegramBot:
         if os.path.exists('./token.txt'):
             with open('./token.txt', 'r+') as fd:
                 token = fd.read()
-                key = input("insert password: ")
+                key = getpass.getpass(prompt="Insert password: ")
                 TOKEN = encrypted.password_decrypt(token, key).decode()
         else:
             TOKEN = input("Insert token: ")
-            key = input("Insert password: ")
+            key = getpass.getpass(prompt="Insert password: ")
             with open('./token.txt', 'w+') as fd:
                 print(encrypted.password_encrypt(TOKEN.encode(), key).decode(), file=fd)
         print("Iniciando bot....")
